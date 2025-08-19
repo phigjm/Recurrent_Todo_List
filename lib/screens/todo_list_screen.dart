@@ -15,6 +15,7 @@ class _TodoListScreenState extends State<TodoListScreen> {
   final TodoService _todoService = TodoService();
   List<Todo> _todos = [];
   bool _isLoading = true;
+  bool _showHidden = false;
 
   @override
   void initState() {
@@ -30,7 +31,10 @@ class _TodoListScreenState extends State<TodoListScreen> {
     try {
       final todos = await _todoService.getTodos();
       setState(() {
-        _todos = _todoService.sortTodosByReminder(todos);
+        _todos = _todoService.sortTodosByReminder(
+          todos,
+          showHidden: _showHidden,
+        );
         _isLoading = false;
       });
     } catch (e) {
@@ -63,20 +67,50 @@ class _TodoListScreenState extends State<TodoListScreen> {
     }
   }
 
-  Future<void> _toggleTodoCompletion(Todo todo) async {
+  Future<void> _markTodoCompleted(Todo todo, {String? note}) async {
     try {
-      final updatedTodo = todo.copyWith(
-        isCompleted: !todo.isCompleted,
-        lastUpdated: DateTime.now(),
-      );
-      await _todoService.updateTodo(updatedTodo);
+      await _todoService.markTodoAsCompleted(todo.id, note: note);
       await _loadTodos();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Todo marked as completed')),
+        );
+      }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text('Error updating todo: $e')));
+        ).showSnackBar(SnackBar(content: Text('Error completing todo: $e')));
       }
+    }
+  }
+
+  Future<void> _snoozeTodo(Todo todo) async {
+    try {
+      await _todoService.snoozeTodo(todo.id);
+      await _loadTodos();
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Todo snoozed')));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error snoozing todo: $e')));
+      }
+    }
+  }
+
+  Future<void> _toggleTodoCompletion(Todo todo) async {
+    if (todo.reminderType == ReminderType.none ||
+        todo.reminderType == ReminderType.custom) {
+      // For non-recurring todos, show completion dialog
+      _showCompletionDialog(todo);
+    } else {
+      // For recurring todos, mark as completed automatically
+      await _markTodoCompleted(todo);
     }
   }
 

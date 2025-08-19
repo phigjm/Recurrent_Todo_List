@@ -19,6 +19,7 @@ class _AddEditTodoScreenState extends State<AddEditTodoScreen> {
   final _todoService = TodoService();
 
   ReminderType _reminderType = ReminderType.none;
+  DateTime? _customReminderDate;
   bool _isLoading = false;
   bool get _isEditing => widget.todo != null;
 
@@ -29,6 +30,7 @@ class _AddEditTodoScreenState extends State<AddEditTodoScreen> {
       _titleController.text = widget.todo!.title;
       _notesController.text = widget.todo!.notes;
       _reminderType = widget.todo!.reminderType;
+      _customReminderDate = widget.todo!.customReminderDate;
     }
   }
 
@@ -57,6 +59,9 @@ class _AddEditTodoScreenState extends State<AddEditTodoScreen> {
           title: _titleController.text.trim(),
           notes: _notesController.text.trim(),
           reminderType: _reminderType,
+          customReminderDate: _reminderType == ReminderType.custom
+              ? _customReminderDate
+              : null,
           nextReminder: _reminderType != ReminderType.none
               ? _calculateNextReminder()
               : null,
@@ -70,6 +75,9 @@ class _AddEditTodoScreenState extends State<AddEditTodoScreen> {
           title: _titleController.text.trim(),
           notes: _notesController.text.trim(),
           reminderType: _reminderType,
+          customReminderDate: _reminderType == ReminderType.custom
+              ? _customReminderDate
+              : null,
           nextReminder: _reminderType != ReminderType.none
               ? _calculateNextReminder()
               : null,
@@ -108,6 +116,8 @@ class _AddEditTodoScreenState extends State<AddEditTodoScreen> {
       case ReminderType.monthly:
         next = DateTime(now.year, now.month + 1, now.day, 9, 0);
         break;
+      case ReminderType.custom:
+        return _customReminderDate ?? now;
       case ReminderType.none:
         return now;
     }
@@ -120,6 +130,39 @@ class _AddEditTodoScreenState extends State<AddEditTodoScreen> {
     return next;
   }
 
+  Future<void> _selectCustomDate() async {
+    final now = DateTime.now();
+    final selectedDate = await showDatePicker(
+      context: context,
+      initialDate: _customReminderDate ?? now.add(const Duration(days: 1)),
+      firstDate: now,
+      lastDate: now.add(const Duration(days: 365 * 2)),
+    );
+
+    if (selectedDate != null) {
+      if (!mounted) return;
+
+      final selectedTime = await showTimePicker(
+        context: context,
+        initialTime: TimeOfDay.fromDateTime(
+          _customReminderDate ?? DateTime(now.year, now.month, now.day, 9, 0),
+        ),
+      );
+
+      if (selectedTime != null) {
+        setState(() {
+          _customReminderDate = DateTime(
+            selectedDate.year,
+            selectedDate.month,
+            selectedDate.day,
+            selectedTime.hour,
+            selectedTime.minute,
+          );
+        });
+      }
+    }
+  }
+
   String _getReminderTypeText(ReminderType type) {
     switch (type) {
       case ReminderType.none:
@@ -130,6 +173,8 @@ class _AddEditTodoScreenState extends State<AddEditTodoScreen> {
         return 'Weekly';
       case ReminderType.monthly:
         return 'Monthly';
+      case ReminderType.custom:
+        return 'Custom date';
     }
   }
 
@@ -219,12 +264,37 @@ class _AddEditTodoScreenState extends State<AddEditTodoScreen> {
                       onChanged: (value) {
                         setState(() {
                           _reminderType = value!;
+                          if (value == ReminderType.custom) {
+                            // Show date picker immediately when custom is selected
+                            WidgetsBinding.instance.addPostFrameCallback((_) {
+                              _selectCustomDate();
+                            });
+                          }
                         });
                       },
                     );
                   }).toList(),
                 ),
               ),
+
+              // Custom date selection UI
+              if (_reminderType == ReminderType.custom) ...[
+                const SizedBox(height: 16),
+                Card(
+                  child: ListTile(
+                    title: const Text('Custom Reminder Date'),
+                    subtitle: _customReminderDate != null
+                        ? Text(
+                            DateFormat(
+                              'MMM dd, yyyy \'at\' HH:mm',
+                            ).format(_customReminderDate!),
+                          )
+                        : const Text('Tap to select date and time'),
+                    trailing: const Icon(Icons.calendar_today),
+                    onTap: _selectCustomDate,
+                  ),
+                ),
+              ],
 
               if (_reminderType != ReminderType.none) ...[
                 const SizedBox(height: 16),
@@ -313,6 +383,9 @@ class _AddEditTodoScreenState extends State<AddEditTodoScreen> {
         break;
       case ReminderType.monthly:
         description = 'Remind me every month';
+        break;
+      case ReminderType.custom:
+        description = 'Remind me on a specific date';
         break;
       case ReminderType.none:
         return null;

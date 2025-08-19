@@ -173,37 +173,106 @@ class TodoService {
     await saveTodos(todos);
   }
 
-  List<Todo> sortTodosByReminder(List<Todo> todos) {
-    // Separate todos with and without reminders
-    final todosWithReminders = todos
-        .where(
-          (todo) =>
-              todo.reminderType != ReminderType.none &&
-              todo.nextReminder != null &&
-              !todo.isCompleted,
-        )
-        .toList();
+  Future<void> markTodoAsCompleted(String todoId, {String? note}) async {
+    final todos = await getTodos();
+    final index = todos.indexWhere((todo) => todo.id == todoId);
 
-    final todosWithoutReminders = todos
-        .where(
-          (todo) =>
-              todo.reminderType == ReminderType.none ||
-              todo.nextReminder == null ||
-              todo.isCompleted,
-        )
-        .toList();
+    if (index != -1) {
+      final updatedTodo = todos[index].markAsCompleted(note: note);
+      todos[index] = updatedTodo;
+      await saveTodos(todos);
+    }
+  }
 
-    // Sort todos with reminders by next reminder time
-    todosWithReminders.sort((a, b) {
-      if (a.nextReminder == null && b.nextReminder == null) return 0;
-      if (a.nextReminder == null) return 1;
-      if (b.nextReminder == null) return -1;
-      return a.nextReminder!.compareTo(b.nextReminder!);
-    });
+  Future<void> snoozeTodo(String todoId) async {
+    final todos = await getTodos();
+    final index = todos.indexWhere((todo) => todo.id == todoId);
 
-    // Sort todos without reminders by creation date
-    todosWithoutReminders.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    if (index != -1) {
+      final updatedTodo = todos[index].snooze();
+      todos[index] = updatedTodo;
+      await saveTodos(todos);
+    }
+  }
 
-    return [...todosWithReminders, ...todosWithoutReminders];
+  Future<void> hideTodo(String todoId) async {
+    final todos = await getTodos();
+    final index = todos.indexWhere((todo) => todo.id == todoId);
+
+    if (index != -1) {
+      final updatedTodo = todos[index].copyWith(
+        isHidden: true,
+        lastUpdated: DateTime.now(),
+      );
+      todos[index] = updatedTodo;
+      await saveTodos(todos);
+    }
+  }
+
+  Future<void> unhideTodo(String todoId) async {
+    final todos = await getTodos();
+    final index = todos.indexWhere((todo) => todo.id == todoId);
+
+    if (index != -1) {
+      final updatedTodo = todos[index].copyWith(
+        isHidden: false,
+        lastUpdated: DateTime.now(),
+      );
+      todos[index] = updatedTodo;
+      await saveTodos(todos);
+    }
+  }
+
+  List<Todo> getVisibleTodos(List<Todo> todos, {bool showHidden = false}) {
+    if (showHidden) return todos;
+
+    return todos.where((todo) => !todo.shouldBeHidden).toList();
+  }
+
+  List<Todo> getHiddenTodos(List<Todo> todos) {
+    return todos.where((todo) => todo.shouldBeHidden).toList();
+  }
+
+  List<Todo> sortTodosByReminder(List<Todo> todos, {bool showHidden = false}) {
+    final visibleTodos = showHidden ? todos : getVisibleTodos(todos);
+
+    // Separate overdue, due today, future reminders, and no reminders
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final tomorrow = today.add(const Duration(days: 1));
+
+    final overdueTodos = <Todo>[];
+    final dueTodayTodos = <Todo>[];
+    final futureTodos = <Todo>[];
+    final noReminderTodos = <Todo>[];
+
+    for (final todo in visibleTodos) {
+      if (todo.isCompleted && todo.reminderType == ReminderType.none) {
+        continue; // Skip completed non-recurring todos
+      }
+
+      if (todo.nextReminder == null || todo.reminderType == ReminderType.none) {
+        noReminderTodos.add(todo);
+      } else if (todo.nextReminder!.isBefore(today)) {
+        overdueTodos.add(todo);
+      } else if (todo.nextReminder!.isBefore(tomorrow)) {
+        dueTodayTodos.add(todo);
+      } else {
+        futureTodos.add(todo);
+      }
+    }
+
+    // Sort each category
+    overdueTodos.sort((a, b) => a.nextReminder!.compareTo(b.nextReminder!));
+    dueTodayTodos.sort((a, b) => a.nextReminder!.compareTo(b.nextReminder!));
+    futureTodos.sort((a, b) => a.nextReminder!.compareTo(b.nextReminder!));
+    noReminderTodos.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+
+    return [
+      ...overdueTodos,
+      ...dueTodayTodos,
+      ...futureTodos,
+      ...noReminderTodos,
+    ];
   }
 }
