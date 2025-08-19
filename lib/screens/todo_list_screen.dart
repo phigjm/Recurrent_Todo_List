@@ -160,7 +160,8 @@ class _TodoListScreenState extends State<TodoListScreen> {
       } else {
         return 'Snooze ending soon';
       }
-    } else if (todo.nextReminder != null && todo.nextReminder!.isAfter(DateTime.now())) {
+    } else if (todo.nextReminder != null &&
+        todo.nextReminder!.isAfter(DateTime.now())) {
       return 'Hidden until reminder';
     }
     return 'Hidden';
@@ -168,7 +169,7 @@ class _TodoListScreenState extends State<TodoListScreen> {
 
   void _showCompletionDialog(Todo todo) {
     final noteController = TextEditingController();
-    
+
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -197,7 +198,12 @@ class _TodoListScreenState extends State<TodoListScreen> {
           TextButton(
             onPressed: () {
               Navigator.of(context).pop();
-              _markTodoCompleted(todo, note: noteController.text.trim().isNotEmpty ? noteController.text.trim() : null);
+              _markTodoCompleted(
+                todo,
+                note: noteController.text.trim().isNotEmpty
+                    ? noteController.text.trim()
+                    : null,
+              );
             },
             child: const Text('Complete'),
           ),
@@ -231,7 +237,9 @@ class _TodoListScreenState extends State<TodoListScreen> {
                   children: [
                     Icon(_showHidden ? Icons.visibility_off : Icons.visibility),
                     const SizedBox(width: 8),
-                    Text(_showHidden ? 'Hide completed/future' : 'Show all todos'),
+                    Text(
+                      _showHidden ? 'Hide completed/future' : 'Show all todos',
+                    ),
                   ],
                 ),
               ),
@@ -295,7 +303,7 @@ class _TodoListScreenState extends State<TodoListScreen> {
   Widget _buildTodoCard(Todo todo) {
     final reminderColor = _getReminderColor(todo);
     final isHidden = todo.shouldBeHidden;
-    
+
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
       elevation: 2,
@@ -304,9 +312,9 @@ class _TodoListScreenState extends State<TodoListScreen> {
         borderRadius: BorderRadius.circular(12),
         side: todo.isCompleted
             ? BorderSide(color: Colors.green[300]!, width: 2)
-            : isHidden 
-              ? BorderSide(color: Colors.orange[300]!, width: 1)
-              : BorderSide.none,
+            : isHidden
+            ? BorderSide(color: Colors.orange[300]!, width: 1)
+            : BorderSide.none,
       ),
       child: InkWell(
         borderRadius: BorderRadius.circular(12),
@@ -329,7 +337,10 @@ class _TodoListScreenState extends State<TodoListScreen> {
               if (isHidden) ...[
                 Container(
                   margin: const EdgeInsets.only(bottom: 8),
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
                   decoration: BoxDecoration(
                     color: Colors.orange[100],
                     borderRadius: BorderRadius.circular(6),
@@ -339,7 +350,9 @@ class _TodoListScreenState extends State<TodoListScreen> {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Icon(
-                        todo.snoozedUntil != null ? Icons.snooze : Icons.visibility_off,
+                        todo.snoozedUntil != null
+                            ? Icons.snooze
+                            : Icons.visibility_off,
                         size: 16,
                         color: Colors.orange[700],
                       ),
@@ -356,7 +369,7 @@ class _TodoListScreenState extends State<TodoListScreen> {
                   ),
                 ),
               ],
-              
+
               Row(
                 children: [
                   InkWell(
@@ -466,13 +479,13 @@ class _TodoListScreenState extends State<TodoListScreen> {
                   const Spacer(),
                   Text(
                     DateFormat('MMM dd').format(todo.createdAt),
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: Colors.grey[500],
-                    ),
+                    style: Theme.of(
+                      context,
+                    ).textTheme.bodySmall?.copyWith(color: Colors.grey[500]),
                   ),
                 ],
               ),
-              
+
               // Show completion history for recurring todos
               if (todo.completionHistory.isNotEmpty) ...[
                 const SizedBox(height: 8),
