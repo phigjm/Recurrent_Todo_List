@@ -150,6 +150,62 @@ class _TodoListScreenState extends State<TodoListScreen> {
     return Colors.blue; // Future reminder
   }
 
+  String _getHiddenStatusText(Todo todo) {
+    if (todo.snoozedUntil != null) {
+      final timeUntil = todo.snoozedUntil!.difference(DateTime.now());
+      if (timeUntil.inHours > 24) {
+        return 'Snoozed for ${timeUntil.inDays} days';
+      } else if (timeUntil.inHours > 0) {
+        return 'Snoozed for ${timeUntil.inHours} hours';
+      } else {
+        return 'Snooze ending soon';
+      }
+    } else if (todo.nextReminder != null && todo.nextReminder!.isAfter(DateTime.now())) {
+      return 'Hidden until reminder';
+    }
+    return 'Hidden';
+  }
+
+  void _showCompletionDialog(Todo todo) {
+    final noteController = TextEditingController();
+    
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Complete Todo'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text('Mark "${todo.title}" as completed?'),
+            const SizedBox(height: 16),
+            TextField(
+              controller: noteController,
+              decoration: const InputDecoration(
+                labelText: 'Completion note (optional)',
+                hintText: 'Add a note about this completion...',
+                border: OutlineInputBorder(),
+              ),
+              maxLines: 3,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.of(context).pop();
+              _markTodoCompleted(todo, note: noteController.text.trim().isNotEmpty ? noteController.text.trim() : null);
+            },
+            child: const Text('Complete'),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -159,6 +215,28 @@ class _TodoListScreenState extends State<TodoListScreen> {
         foregroundColor: Colors.white,
         elevation: 0,
         actions: [
+          PopupMenuButton<String>(
+            onSelected: (value) {
+              if (value == 'toggle_hidden') {
+                setState(() {
+                  _showHidden = !_showHidden;
+                });
+                _loadTodos();
+              }
+            },
+            itemBuilder: (context) => [
+              PopupMenuItem(
+                value: 'toggle_hidden',
+                child: Row(
+                  children: [
+                    Icon(_showHidden ? Icons.visibility_off : Icons.visibility),
+                    const SizedBox(width: 8),
+                    Text(_showHidden ? 'Hide completed/future' : 'Show all todos'),
+                  ],
+                ),
+              ),
+            ],
+          ),
           IconButton(icon: const Icon(Icons.refresh), onPressed: _loadTodos),
         ],
       ),
@@ -216,15 +294,19 @@ class _TodoListScreenState extends State<TodoListScreen> {
 
   Widget _buildTodoCard(Todo todo) {
     final reminderColor = _getReminderColor(todo);
-
+    final isHidden = todo.shouldBeHidden;
+    
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
       elevation: 2,
+      color: isHidden ? Colors.grey[100] : null,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
         side: todo.isCompleted
             ? BorderSide(color: Colors.green[300]!, width: 2)
-            : BorderSide.none,
+            : isHidden 
+              ? BorderSide(color: Colors.orange[300]!, width: 1)
+              : BorderSide.none,
       ),
       child: InkWell(
         borderRadius: BorderRadius.circular(12),
@@ -243,6 +325,38 @@ class _TodoListScreenState extends State<TodoListScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              // Hidden status indicator
+              if (isHidden) ...[
+                Container(
+                  margin: const EdgeInsets.only(bottom: 8),
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: Colors.orange[100],
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(color: Colors.orange[300]!),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        todo.snoozedUntil != null ? Icons.snooze : Icons.visibility_off,
+                        size: 16,
+                        color: Colors.orange[700],
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        _getHiddenStatusText(todo),
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.orange[700],
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+              
               Row(
                 children: [
                   InkWell(
@@ -278,9 +392,35 @@ class _TodoListScreenState extends State<TodoListScreen> {
                     onSelected: (value) {
                       if (value == 'delete') {
                         _showDeleteConfirmation(todo);
+                      } else if (value == 'snooze') {
+                        _snoozeTodo(todo);
+                      } else if (value == 'complete_with_note') {
+                        _showCompletionDialog(todo);
                       }
                     },
                     itemBuilder: (context) => [
+                      if (!todo.isCompleted) ...[
+                        const PopupMenuItem(
+                          value: 'complete_with_note',
+                          child: Row(
+                            children: [
+                              Icon(Icons.check, color: Colors.green),
+                              SizedBox(width: 8),
+                              Text('Complete with note'),
+                            ],
+                          ),
+                        ),
+                        const PopupMenuItem(
+                          value: 'snooze',
+                          child: Row(
+                            children: [
+                              Icon(Icons.snooze, color: Colors.orange),
+                              SizedBox(width: 8),
+                              Text('Snooze'),
+                            ],
+                          ),
+                        ),
+                      ],
                       const PopupMenuItem(
                         value: 'delete',
                         child: Row(
@@ -326,12 +466,48 @@ class _TodoListScreenState extends State<TodoListScreen> {
                   const Spacer(),
                   Text(
                     DateFormat('MMM dd').format(todo.createdAt),
-                    style: Theme.of(
-                      context,
-                    ).textTheme.bodySmall?.copyWith(color: Colors.grey[500]),
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: Colors.grey[500],
+                    ),
                   ),
                 ],
               ),
+              
+              // Show completion history for recurring todos
+              if (todo.completionHistory.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.green[50],
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(color: Colors.green[200]!),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(Icons.history, size: 16, color: Colors.green[600]),
+                      const SizedBox(width: 4),
+                      Text(
+                        'Completed ${todo.completionHistory.length} time${todo.completionHistory.length != 1 ? 's' : ''}',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.green[600],
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      const Spacer(),
+                      if (todo.completionHistory.isNotEmpty)
+                        Text(
+                          'Last: ${DateFormat('MMM dd').format(todo.completionHistory.last.completedAt)}',
+                          style: TextStyle(
+                            fontSize: 10,
+                            color: Colors.green[500],
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ],
             ],
           ),
         ),
